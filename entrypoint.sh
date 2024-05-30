@@ -215,8 +215,13 @@ fi
 # normally use non-debug version of nginx
 NGINX_BIN="/usr/sbin/nginx"
 
+# Activate venv that contains mitm
+cd /venv
+source bin/activate
+echo =============================
+
 if [[ "a${DEBUG}" == "atrue" ]]; then
-  if [[ ! -f /usr/bin/mitmweb ]]; then
+  if [[ ! -f bin/mitmweb ]]; then
     echo "To debug, you need the -debug version of this image, eg: :latest-debug"
     exit 3
   fi
@@ -235,7 +240,7 @@ if [[ "a${DEBUG}" == "atrue" ]]; then
 fi
 
 if [[ "a${DEBUG_HUB}" == "atrue" ]]; then
-  if [[ ! -f /usr/bin/mitmweb ]]; then
+  if [[ ! -f bin/mitmweb ]]; then
     echo "To debug, you need the -debug version of this image, eg: :latest-debug"
     exit 3
   fi

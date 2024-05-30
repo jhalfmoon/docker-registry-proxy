@@ -1,3 +1,8 @@
+# NOTE: To keep this build up to date, keep the MarkupSafe and mitmproxy defined below up to date.
+#
+# https://github.com/mitmproxy/mitmproxy/releases
+# https://github.com/pallets/markupsafe/releases
+
 # We start from my nginx fork which includes the proxy-connect module from tEngine
 # Source is available at https://github.com/rpardini/nginx-proxy-connect-stable-alpine
 # This is already multi-arch!
@@ -18,16 +23,17 @@ ARG DO_DEBUG_BUILD="${DEBUG_IMAGE:-"0"}"
 # Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer. Oh well.
 RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
  && apk add --no-cache --update su-exec git g++ libffi libffi-dev libstdc++ openssl-dev python3 python3-dev py3-pip py3-wheel py3-six py3-idna py3-certifi py3-setuptools rust cargo bsd-compat-headers \
- && MAKEFLAGS="-j$(nproc)" LDFLAGS=-L/lib pip install MarkupSafe==2.1.3 mitmproxy==10.1.0 \
+ && mkdir /venv         \
+ && cd venv             \
+ && python -m venv .    \
+ && source bin/activate \
+ && MAKEFLAGS="-j$(nproc)" LDFLAGS=-L/lib pip install MarkupSafe==2.1.5 mitmproxy==10.3.0 \
  && apk del --purge git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel rust cargo bsd-compat-headers \
  && rm -rf ~/.cache/pip ~/.cargo \
  ; } || { echo "Debug build disabled." ; }
 
 # Required for mitmproxy
 ENV LANG=en_US.UTF-8
-
-# Check the installed mitmproxy version, if built.
-RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { mitmproxy --version && mitmweb --version ; } || { echo "Debug build disabled."; }
 
 # Create the cache directory and CA directory
 RUN mkdir -p /docker_mirror_cache /ca
