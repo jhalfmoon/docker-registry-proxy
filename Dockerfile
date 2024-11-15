@@ -41,7 +41,7 @@ RUN \
  && cd venv \
  && python -m venv . \
  && source bin/activate \
- && MAKEFLAGS="-j$(nproc)" LDFLAGS=-L/lib pip install MarkupSafe==2.1.5 mitmproxy==10.4.2 \
+ && MAKEFLAGS="-j$(nproc)" LDFLAGS=-L/lib pip install MarkupSafe==3.0.2 mitmproxy==11.0.0 \
  && apk del --purge build-deps \
  ; } || { echo "Debug build disabled." ; }
 
