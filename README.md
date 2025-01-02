@@ -1,3 +1,10 @@
+This is a fork of a fork. The goal of it is to have updated versions of build dependencies, ie. to have recent versions of nginx and the alpine base image.
+
+The original fork: https://github.com/coreweave/docker-registry-proxy
+The original repo: https://github.com/rpardini/docker-registry-proxy
+
+---
+
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/rpardini/docker-registry-proxy/master-latest?label=%3Alatest%20from%20master)
 ![GitHub tag (latest by date)](https://img.shields.io/github/v/tag/rpardini/docker-registry-proxy?label=last%20tagged%20release)
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/rpardini/docker-registry-proxy/tags?label=last%20tagged%20release)

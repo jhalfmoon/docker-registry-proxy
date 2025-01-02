@@ -8,32 +8,49 @@ ARG DEBUG_IMAGE
 ARG BASE_IMAGE_SUFFIX="${IMAGE_SUFFIX}"
 FROM ${BASE_IMAGE}${BASE_IMAGE_SUFFIX}
 
+# https://github.com/mitmproxy/mitmproxy/releases
+ENV MARKUPSAFE_VER="3.0.2"
+# https://github.com/pallets/markupsafe/releases
+ENV MITMPROXY_VER="11.0.2"
+
 # Link image to original repository on GitHub
 LABEL org.opencontainers.image.source https://github.com/rpardini/docker-registry-proxy
 
 # apk packages that will be present in the final image both debug and release
-RUN apk add --no-cache --update bash ca-certificates-bundle coreutils openssl
+RUN \
+ --mount=type=cache,mode=0755,target=/var/cache/apk \
+ apk add ---update --cache-max-age 120 bash ca-certificates-bundle coreutils openssl curl
 
 # If set to 1, enables building mitmproxy, which helps a lot in debugging, but is super heavy to build.
 ARG DEBUG_IMAGE
 ARG DO_DEBUG_BUILD="${DEBUG_IMAGE:-"0"}"
 
-# Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer. Oh well.
-RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
- && apk add --no-cache --update su-exec cargo bsd-compat-headers git g++ libffi libffi-dev libstdc++ openssl-dev python3 python3-dev py3-pip py3-wheel py3-six py3-idna py3-certifi py3-setuptools \
- && sed -i 's|v3\.\d*|edge|' /etc/apk/repositories \
- && apk --no-cache upgrade rust \
- && rm /usr/lib/python3.*/EXTERNALLY-MANAGED \
- && LDFLAGS=-L/lib pip install MarkupSafe mitmproxy \
- && apk del --purge git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel \
- && rm -rf ~/.cache/pip \
+# Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer.
+# NOTES:
+#   * Rust is installed using rustup to get the latest version, as the alpine package was too old for this build at one point.
+#   * Venv is used to create an installation that is independent of the OS python and its modules.
+#   * Cache mounts are used for improved repeated build times. These caches are not included in the final image and as such need and should not be purged.
+RUN \
+ --mount=type=cache,mode=0755,target=/var/cache/apk \
+ --mount=type=cache,mode=0755,target=/root/.cache/pip \
+ --mount=type=cache,mode=0755,target=/root/.cargo \
+ --mount=type=cache,mode=0755,target=/root/.rustup \
+ [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
+ && apk add --update --cache-max-age 120 su-exec libffi libstdc++ python3 py3-six py3-idna py3-certifi py3-setuptools \
+ && apk add --update --cache-max-age 120 --virtual build-deps git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel bsd-compat-headers \
+ && apk add rustup \
+ && rustup-init -yq \
+ && source "$HOME/.cargo/env" \
+ && mkdir /venv \
+ && cd venv \
+ && python -m venv . \
+ && source bin/activate \
+ && MAKEFLAGS="-j$(nproc)" LDFLAGS=-L/lib pip install MarkupSafe==${MARKUPSAFE_VER} mitmproxy==${MITMPROXY_VER} \
+ && apk del --purge build-deps \
  ; } || { echo "Debug build disabled." ; }
 
 # Required for mitmproxy
 ENV LANG=en_US.UTF-8
-
-# Check the installed mitmproxy version, if built.
-RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { mitmproxy --version && mitmweb --version ; } || { echo "Debug build disabled."; }
 
 # Create the cache directory and CA directory
 RUN mkdir -p /docker_mirror_cache /ca
@@ -55,8 +72,7 @@ ADD entrypoint.sh /entrypoint.sh
 ADD create_ca_cert.sh /create_ca_cert.sh
 RUN chmod +x /create_ca_cert.sh /entrypoint.sh
 
-# Add Liveliness Probe script for CoreWeave
-RUN apk --no-cache add curl
+# Add Liveliness Probe script for CoreWeave. NOTE: Depends on curl being installed.
 ADD liveliness.sh /liveliness.sh
 RUN chmod +x /liveliness.sh
 

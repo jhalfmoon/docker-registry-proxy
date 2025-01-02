@@ -256,7 +256,13 @@ fi
 NGINX_BIN="/usr/sbin/nginx"
 
 if [[ "a${DEBUG}" == "atrue" ]]; then
-  if [[ ! -f /usr/bin/mitmweb ]]; then
+  if [[ ! -d /venv ]] ; then
+    echo "ERROR: Expecting /venv to exist, but did not find it. To debug, you need the -debug version of this image."
+    exit 3
+  fi
+  cd /venv
+  source bin/activate
+  if [[ ! -f bin/mitmweb ]]; then
     echo "To debug, you need the -debug version of this image, eg: :latest-debug"
     exit 3
   fi
@@ -275,7 +281,13 @@ if [[ "a${DEBUG}" == "atrue" ]]; then
 fi
 
 if [[ "a${DEBUG_HUB}" == "atrue" ]]; then
-  if [[ ! -f /usr/bin/mitmweb ]]; then
+  if [[ ! -d /venv ]] ; then
+    echo "ERROR: Expecting /venv to exist, but did not find it. To debug, you need the -debug version of this image."
+    exit 3
+  fi
+  cd /venv
+  source bin/activate
+  if [[ ! -f bin/mitmweb ]]; then
     echo "To debug, you need the -debug version of this image, eg: :latest-debug"
     exit 3
   fi
