@@ -33,6 +33,10 @@ confpath=/etc/nginx/resolvers.conf
 if [ ! -e $confpath ] || [ "$conf" != "$(cat $confpath)" ]
 then
     echo "Using auto-determined resolver '$conf' via '$confpath'"
+    if [[ "a${DISABLE_IPV6}" == "atrue" ]]; then
+      echo "Disabling IPv6 in '$confpath'"
+      conf="${conf%;*} ipv6=off;"
+    fi
     echo "$conf" > $confpath
 else
     echo "Not using resolver config, keep existing '$confpath' -- mounted by user?"
@@ -394,6 +398,10 @@ fi
 
 # Set worker processes if provided
 sed -i "s/worker_processes  auto;/worker_processes  ${WORKER_PROCESSES};/g" /etc/nginx/nginx.conf
+
+echo -e "\nFinal resolver configuration: ---"
+cat "${confpath}"
+echo -e "---\n"
 
 echo "Testing nginx config..."
 ${NGINX_BIN} -t
