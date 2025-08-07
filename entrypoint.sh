@@ -25,7 +25,7 @@ echo "DEBUG, determined RESOLVERS from /etc/resolv.conf: '$RESOLVERS'"
 conf=""
 for ONE_RESOLVER in ${RESOLVERS}; do
 	echo "Possible resolver: $ONE_RESOLVER"
-	conf="resolver $ONE_RESOLVER ipv6=off; "
+	conf="resolver $ONE_RESOLVER; "
 done
 
 echo "Final chosen resolver: $conf"
