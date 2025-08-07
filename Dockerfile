@@ -146,8 +146,13 @@ ENV PROXY_CONNECT_READ_TIMEOUT="60s"
 ENV PROXY_CONNECT_CONNECT_TIMEOUT="60s"
 ENV PROXY_CONNECT_SEND_TIMEOUT="60s"
 
-# Allow disabling IPV6 resolution, default to false
-ENV DISABLE_IPV6="false"
+# Allow disabling IPV6 resolution, default to true
+ENV DISABLE_IPV6="true"
+
+# Bitnami dockerhub overrides
+ENV BITNAMI_DOCKERHUB_HOST_OVERRIDE="false"
+ENV BITNAMI_HOST=""
+ENV BITNAMI_LEGACY_DOCKERHUB_URI_REWRITE="false"
 
 # Did you want a shell? Sorry, the entrypoint never returns, because it runs nginx itself. Use 'docker exec' if you need to mess around internally.
 ENTRYPOINT ["/entrypoint.sh"]

@@ -50,7 +50,7 @@ ALLDOMAINS=""
 echo -n "" > /etc/nginx/docker.intercept.map
 
 # Some hosts/registries are always needed, but others can be configured in env var REGISTRIES
-for ONEREGISTRYIN in docker.caching.proxy.internal registry-1.docker.io auth.docker.io ${REGISTRIES}; do
+for ONEREGISTRYIN in docker.caching.proxy.internal index.docker.io registry-1.docker.io auth.docker.io ${REGISTRIES}; do
     ONEREGISTRY=$(echo ${ONEREGISTRYIN} | xargs) # Remove whitespace
     echo "Adding certificate for registry: $ONEREGISTRY"
     ALLDOMAINS="${ALLDOMAINS},DNS:${ONEREGISTRY}"
@@ -398,6 +398,37 @@ fi
 
 # Set worker processes if provided
 sed -i "s/worker_processes  auto;/worker_processes  ${WORKER_PROCESSES};/g" /etc/nginx/nginx.conf
+
+echo "" > /etc/nginx/nginx.manifest.override.conf
+if [[ "a${BITNAMI_DOCKERHUB_HOST_OVERRIDE}" == "atrue" && ${BITNAMI_HOST} != "" ]]; then
+    cat << EOD >> /etc/nginx/nginx.manifest.override.conf
+    set \$overrideHost 0;
+    if (\$request_uri ~ ^/v2/bitnami/) {
+        set \$overrideHost 1;
+    }
+    if (\$host !~* (^|\.)docker\.io$) {
+        set \$overrideHost 0;
+    }
+    if (\$overrideHost) {
+        set \$targetHost "${BITNAMI_HOST}";
+    }
+EOD
+fi
+
+if [[ "a${BITNAMI_LEGACY_DOCKERHUB_URI_REWRITE}" == "atrue" ]]; then
+    cat << EOD >> /etc/nginx/nginx.manifest.override.conf
+    set \$doRewrite 0;
+    if (\$request_uri ~ ^/v2/bitnami/) {
+        set \$doRewrite 1;
+    }
+    if (\$host !~* (^|\.)docker\.io$) {
+        set \$doRewrite 0;
+    }
+    if (\$doRewrite) {
+        rewrite ^/v2/bitnami/(.*)$ /v2/bitnamilegacy\$1 break;
+    }
+EOD
+fi
 
 echo -e "\nFinal resolver configuration: ---"
 cat "${confpath}"
