@@ -19,13 +19,13 @@ spec:
       serviceAccountName: default
       containers:
         - name: docker-registry-proxy
-          image: ghcr.io/rpardini/docker-registry-proxy:0.6.1
+          image: ghcr.io/rpardini/docker-registry-proxy:0.6.5
           imagePullPolicy: IfNotPresent
           env:
             - name: ENABLE_MANIFEST_CACHE
               value: "true"
             - name: REGISTRIES
-              value: "k8s.gcr.io gcr.io quay.io us.gcr.io"
+              value: "registry.k8s.io gcr.io quay.io us.gcr.io"
           ports:
             - name: http
               containerPort: 3128
