@@ -4,7 +4,7 @@
 # We start from my nginx fork which includes the proxy-connect module from tEngine
 # Source is available at https://github.com/rpardini/nginx-proxy-connect-stable-alpine
 # This is already multi-arch!
-ARG BASE_IMAGE="registry.gitlab.com/coreweave/nginx-proxy-connect-stable-alpine:v1.2.0"
+ARG BASE_IMAGE="registry.gitlab.com/coreweave/nginx-proxy-connect-stable-alpine:v1.5.0"
 ARG DEBUG_IMAGE
 # Could be "-debug"
 
@@ -12,7 +12,7 @@ ARG BASE_IMAGE_SUFFIX="${IMAGE_SUFFIX}"
 FROM ${BASE_IMAGE}${BASE_IMAGE_SUFFIX}
 
 # Link image to original repository on GitHub
-LABEL org.opencontainers.image.source=https://github.com/rpardini/docker-registry-proxy
+LABEL org.opencontainers.image.source=https://github.com/coreweave/docker-registry-proxy
 
 # apk packages that will be present in the final image both debug and release
 RUN apk add --no-cache --update bash ca-certificates-bundle coreutils openssl
@@ -23,11 +23,8 @@ ARG DO_DEBUG_BUILD="${DEBUG_IMAGE:-"0"}"
 
 # Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer. Oh well.
 RUN [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
- && apk add --no-cache --update su-exec cargo bsd-compat-headers git g++ libffi libffi-dev libstdc++ openssl-dev python3 python3-dev py3-pip py3-wheel py3-six py3-idna py3-certifi py3-setuptools \
- && sed -i 's|v3\.\d*|edge|' /etc/apk/repositories \
- && apk --no-cache upgrade rust \
+ && apk add --no-cache --update su-exec cargo bsd-compat-headers git g++ libffi libffi-dev libstdc++ openssl-dev python3 python3-dev py3-pip py3-wheel py3-six py3-idna py3-certifi py3-setuptools mitmproxy \
  && rm /usr/lib/python3.*/EXTERNALLY-MANAGED \
- && LDFLAGS=-L/lib pip install MarkupSafe mitmproxy \
  && apk del --purge git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel \
  && rm -rf ~/.cache/pip \
  ; } || { echo "Debug build disabled." ; }
@@ -149,8 +146,13 @@ ENV PROXY_CONNECT_READ_TIMEOUT="60s"
 ENV PROXY_CONNECT_CONNECT_TIMEOUT="60s"
 ENV PROXY_CONNECT_SEND_TIMEOUT="60s"
 
-# Allow disabling IPV6 resolution, default to false
-ENV DISABLE_IPV6="false"
+# Allow disabling IPV6 resolution, default to true
+ENV DISABLE_IPV6="true"
+
+# Bitnami dockerhub overrides
+ENV BITNAMI_DOCKERHUB_HOST_OVERRIDE="false"
+ENV BITNAMI_HOST=""
+ENV BITNAMI_LEGACY_DOCKERHUB_URI_REWRITE="false"
 
 # Did you want a shell? Sorry, the entrypoint never returns, because it runs nginx itself. Use 'docker exec' if you need to mess around internally.
 ENTRYPOINT ["/entrypoint.sh"]
