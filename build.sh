@@ -15,9 +15,10 @@ fi
 ALPINE_VER=$(cat $BASE_IMAGE_DIR/Dockerfile | grep 'FROM alpine:' | cut -d: -f2)
 NGINX_VER=$(cat $BASE_IMAGE_DIR/Dockerfile | grep 'ENV NGINX_VERSION' | tr '=' ' ' | awk '{print $3}')
 
-DOCKER_PROXY_DEBUG=1
+# This variable will be used buil nginx-proxy-connect build script, so export it
+export DOCKER_PROXY_DEBUG=0
 
-if [[ DOCKER_PROXY_DEBUG -eq 1 ]] ; then
+if [[ $DOCKER_PROXY_DEBUG -eq 1 ]] ; then
     IMAGE_SUFFIX='-debug'
 else
     IMAGE_SUFFIX=''

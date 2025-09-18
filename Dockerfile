@@ -9,7 +9,6 @@
 # When the supplied build.sh script is used, the default of BASE_IMAGE defined below will be overriden.
 
 ARG BASE_IMAGE="registry.gitlab.com/coreweave/nginx-proxy-connect-stable-alpine:v1.5.0"
-ARG DEBUG_IMAGE
 # Could be "-debug"
 
 ARG BASE_IMAGE_SUFFIX="${IMAGE_SUFFIX}"
@@ -18,6 +17,7 @@ FROM ${BASE_IMAGE}${BASE_IMAGE_SUFFIX}
 # https://github.com/pallets/markupsafe/releases
 ENV MARKUPSAFE_VER="3.0.2"
 # https://github.com/mitmproxy/mitmproxy/releases
+# NOTE: v12.1.2 fails to build d.d. 2025-9-18
 ENV MITMPROXY_VER="11.1.3"
 
 # Link image to original repository on GitHub
