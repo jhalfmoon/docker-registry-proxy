@@ -3,17 +3,21 @@
 # This script is mainly meant to help develop / debug this image build.
 
 HERE=$(dirname $(readlink -f $0))
+BASE_IMAGE_COMMIT=jhalfmoon-sync-to-latest-upstream
 BASE_IMAGE_URL=https://github.com/jhalfmoon/nginx-proxy-connect-stable-alpine
-BASE_IMAGE_DIR=../nginx-proxy-connect-stable-alpine
+BASE_IMAGE_DIR=/tmp/nginx-proxy-connect-stable-alpine
 if [[ ! -d $BASE_IMAGE_DIR ]] ; then
-    echo "ERROR: $BASE_IMAGE_DIR does not exist. Suggested action:"
-    echo "git clone $BASE_IMAGE_URL $HERE/$BASE_IMAGE_DIR"
-    exit 1
+    git clone $BASE_IMAGE_URL $BASE_IMAGE_DIR
+else
+    cd $BASE_IMAGE_DIR
+    git checkout $BASE_IMAGE_COMMIT
+    git pull
+    cd -
 fi
 
-# The following variables must match those used to build the base image.
-ALPINE_VER=$(cat $BASE_IMAGE_DIR/Dockerfile | grep 'FROM alpine:' | cut -d: -f2)
-NGINX_VER=$(cat $BASE_IMAGE_DIR/Dockerfile | grep 'ENV NGINX_VERSION' | tr '=' ' ' | awk '{print $3}')
+# Copy variables from the base image build file
+ALPINE_VER=$(cat $BASE_IMAGE_DIR/Dockerfile | grep '^FROM alpine:' | cut -d: -f2)
+NGINX_VER=$(cat $BASE_IMAGE_DIR/Dockerfile | grep '^ENV NGINX_VERSION' | tr '=' ' ' | awk '{print $3}')
 
 # This variable will be used buil nginx-proxy-connect build script, so export it
 export DOCKER_PROXY_DEBUG=0

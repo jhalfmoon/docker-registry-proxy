@@ -10,24 +10,22 @@
 
 ARG BASE_IMAGE="registry.gitlab.com/coreweave/nginx-proxy-connect-stable-alpine:v1.5.0"
 # Could be "-debug"
-
 ARG BASE_IMAGE_SUFFIX="${IMAGE_SUFFIX}"
 FROM ${BASE_IMAGE}${BASE_IMAGE_SUFFIX}
 
 # https://github.com/pallets/markupsafe/releases
-ENV MARKUPSAFE_VER="3.0.2"
+ENV MARKUPSAFE_VER="3.0.4"
 # https://github.com/mitmproxy/mitmproxy/releases
-# NOTE: v12.1.2 fails to build d.d. 2025-9-18
-ENV MITMPROXY_VER="11.1.3"
+# NOTE: v12.2.3 and 11.1.3 fails to build d.d. 2025-9-18
+ENV MITMPROXY_VER="10.4.2"
 
 # Link image to original repository on GitHub
 LABEL org.opencontainers.image.source=https://github.com/coreweave/docker-registry-proxy
 
 # apk packages that will be present in the final image both debug and release
-# curl is required for the health check
 RUN \
  --mount=type=cache,mode=0755,target=/var/cache/apk \
- apk add ---update --cache-max-age 120 bash ca-certificates-bundle coreutils openssl curl
+ apk add --update --cache-max-age 120 bash ca-certificates-bundle coreutils openssl
 
 # If set to 1, enables building mitmproxy, which helps a lot in debugging, but is super heavy to build.
 ARG DEBUG_IMAGE
@@ -36,7 +34,7 @@ ARG DO_DEBUG_BUILD="${DEBUG_IMAGE:-"0"}"
 # Build mitmproxy via pip. This is heavy, takes minutes do build and creates a 90mb+ layer.
 # NOTES:
 #   * Rust is installed using rustup to get the latest version, as the alpine package was too old for this build at one point.
-#   * Venv is used to create an installation that is independent of the OS python and its modules.
+#   * venv is used to create an installation that is independent of the OS python and its modules.
 #   * Cache mounts are used for improved repeated build times. These caches are not included in the final image and as such need and should not be purged.
 RUN \
  --mount=type=cache,mode=0755,target=/var/cache/apk \
@@ -44,11 +42,8 @@ RUN \
  --mount=type=cache,mode=0755,target=/root/.cargo \
  --mount=type=cache,mode=0755,target=/root/.rustup \
  [[ "a$DO_DEBUG_BUILD" == "a1" ]] && { echo "Debug build ENABLED." \
- && apk add --update --cache-max-age 120 su-exec libffi libstdc++ python3 py3-six py3-idna py3-certifi py3-setuptools \
+ && apk add --update --cache-max-age 120 su-exec cargo libffi libstdc++ python3 py3-six py3-idna py3-certifi py3-setuptools \
  && apk add --update --cache-max-age 120 --virtual build-deps git g++ libffi-dev openssl-dev python3-dev py3-pip py3-wheel bsd-compat-headers \
- && apk add rustup \
- && rustup-init -yq \
- && source "$HOME/.cargo/env" \
  && mkdir /venv \
  && cd venv \
  && python -m venv . \
@@ -80,10 +75,6 @@ ADD entrypoint.sh /entrypoint.sh
 ADD create_ca_cert.sh /create_ca_cert.sh
 RUN chmod +x /create_ca_cert.sh /entrypoint.sh
 
-# Add Liveliness Probe script for CoreWeave. NOTE: Depends on curl being installed.
-ADD liveliness.sh /liveliness.sh
-RUN chmod +x /liveliness.sh
-
 # Clients should only use 3128, not anything else.
 EXPOSE 3128
 
@@ -105,10 +96,6 @@ ENV DEBUG="false"
 ENV DEBUG_HUB="false"
 # Enable nginx debugging mode; this uses nginx-debug binary and enabled debug logging, which is VERY verbose so separate setting
 ENV DEBUG_NGINX="false"
-# Enable slow caching tier; this allows caching in a secondary cache path on e.g a larger slower disk; for known URIs defined in SLOW_TIER_URIS
-ENV SLOW_TIER_ENABLED="false"
-# Statically define worker_processes; defaults to auto
-ENV WORKER_PROCESSES="auto"
 
 # Manifest caching tiers. Disabled by default, to mimick 0.4/0.5 behaviour.
 # Setting it to true enables the processing of the ENVs below.
@@ -140,21 +127,6 @@ ENV ALLOW_PUSH="false"
 # Default is true to not change default behavior.
 ENV PROXY_REQUEST_BUFFERING="true"
 
-# Force HTTP/1.1 upstream connections, for http2 upstream that returns 426 Upgrade Required
-ENV FORCE_UPSTREAM_HTTP_1_1="false"
-
-# Stream data; reduce TTFB
-# Effectively disables caching
-# Default is true to not change default behavior.
-ENV PROXY_BUFFERING="true"
-
-# Should we allow overridding with own authentication, default to false.
-ENV ALLOW_OWN_AUTH="false"
-
-# Should we allow push only with own authentication, default to false.
-ENV ALLOW_PUSH_WITH_OWN_AUTH="false"
-
-
 # Timeouts
 # ngx_http_core_module
 ENV SEND_TIMEOUT="60s"
@@ -170,13 +142,8 @@ ENV PROXY_CONNECT_READ_TIMEOUT="60s"
 ENV PROXY_CONNECT_CONNECT_TIMEOUT="60s"
 ENV PROXY_CONNECT_SEND_TIMEOUT="60s"
 
-# Allow disabling IPV6 resolution, default to true
-ENV DISABLE_IPV6="true"
-
-# Bitnami dockerhub overrides
-ENV BITNAMI_DOCKERHUB_HOST_OVERRIDE="false"
-ENV BITNAMI_HOST=""
-ENV BITNAMI_LEGACY_DOCKERHUB_URI_REWRITE="false"
+# Allow disabling IPV6 resolution, default to false
+ENV DISABLE_IPV6="false"
 
 # Did you want a shell? Sorry, the entrypoint never returns, because it runs nginx itself. Use 'docker exec' if you need to mess around internally.
 ENTRYPOINT ["/entrypoint.sh"]

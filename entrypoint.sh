@@ -30,7 +30,7 @@ done
 
 echo "Final chosen resolver: $conf"
 confpath=/etc/nginx/resolvers.conf
-if [ ! -e $confpath ] || [ "$conf" != "$(cat $confpath)" ]
+if [ ! -e $confpath ]
 then
     echo "Using auto-determined resolver '$conf' via '$confpath'"
     if [[ "a${DISABLE_IPV6}" == "atrue" ]]; then
@@ -50,7 +50,7 @@ ALLDOMAINS=""
 echo -n "" > /etc/nginx/docker.intercept.map
 
 # Some hosts/registries are always needed, but others can be configured in env var REGISTRIES
-for ONEREGISTRYIN in docker.caching.proxy.internal index.docker.io registry-1.docker.io auth.docker.io ${REGISTRIES}; do
+for ONEREGISTRYIN in docker.caching.proxy.internal registry-1.docker.io auth.docker.io ${REGISTRIES}; do
     ONEREGISTRY=$(echo ${ONEREGISTRYIN} | xargs) # Remove whitespace
     echo "Adding certificate for registry: $ONEREGISTRY"
     ALLDOMAINS="${ALLDOMAINS},DNS:${ONEREGISTRY}"
@@ -103,52 +103,11 @@ echo "error_log  /var/log/nginx/error.log warn;" > /etc/nginx/error.log.debug.wa
 
 # Set Docker Registry cache size, by default, 32 GB ('32g')
 CACHE_MAX_SIZE=${CACHE_MAX_SIZE:-32g}
-
-# Set cache directory location, by default, /docker_mirror_cache
-CACHE_DIRECTORY=${CACHE_DIRECTORY:-/docker_mirror_cache}
+CACHE_INACTIVE=${CACHE_INACTIVE:-60d}
 
 # The cache directory. This can get huge. Better to use a Docker volume pointing here!
 # Set to 32gb which should be enough
-echo "proxy_cache_path ${CACHE_DIRECTORY} levels=1:2 max_size=${CACHE_MAX_SIZE:-15g} min_free=${CACHE_MIN_FREE:-1g} inactive=${CACHE_INACTIVE_TIME:-60d} keys_zone=cache:${CACHE_KEYS_ZONE:-15m} use_temp_path=off manager_threshold=${CACHE_MANAGER_THRESHOLD:-1000ms} manager_sleep=${CACHE_MANAGER_SLEEP:-250ms} manager_files=${CACHE_MANAGER_FILES:-100} loader_files=${CACHE_LOADER_FILES:-100} loader_threshold=${CACHE_LOADER_THRESHOLD:-200ms} loader_sleep=${CACHE_LOADER_SLEEP:-50ms};" > /etc/nginx/conf.d/cache_max_size.conf
-
-if [[ "a${SLOW_TIER_ENABLED}" == "atrue" ]]; then
-    {
-        echo ""
-        echo "proxy_cache_path ${SLOW_CACHE_DIRECTORY} levels=1:2 max_size=${SLOW_CACHE_MAX_SIZ:-15g} min_free=${SLOW_CACHE_MIN_FREE:-1g} inactive=${SLOW_CACHE_INACTIVE_TIME:-120d} keys_zone=slow_cache:${SLOW_CACHE_KEYS_ZONE:-150m} use_temp_path=off manager_threshold=${SLOW_CACHE_MANAGER_THRESHOLD:-1000ms} manager_sleep=${SLOW_CACHE_MANAGER_SLEEP:-250ms} manager_files=${SLOW_CACHE_MANAGER_FILES:-100} loader_files=${SLOW_CACHE_LOADER_FILES:-100} loader_threshold=${SLOW_CACHE_LOADER_THRESHOLD:-200ms} loader_sleep=${SLOW_CACHE_LOADER_SLEEP:-50ms};"
-        echo ""
-        echo "map \$request_uri \$cache {"
-        echo "    ${SLOW_TIER_URIS%;};" | sed 's/;/  slow_cache;\n    /g'
-        echo "    default cache;"
-        echo "}"
-        echo ""
-    } >> /etc/nginx/conf.d/cache_max_size.conf; else
-
-    {
-        echo ""
-        echo "map \$request_uri \$cache {"
-        echo "    default cache;"
-        echo "}"
-        echo ""
-    } >> /etc/nginx/conf.d/cache_max_size.conf;
-fi
-
-# Clear the cache directory if the free space is less than the threshold
-# Get the available space in the directory
-free_space=$(df -BG "${CACHE_DIRECTORY}" | awk 'NR==2 {print $4}' | tr -d 'G')
-
-min_free=$(sed 's/g//I' <<< "${CACHE_MIN_FREE:-1g}")
-
-# Compare available space with the threshold
-if [[ ! ("${free_space}" -gt "${min_free}") ]]; then
-    echo "Free space in ${CACHE_DIRECTORY} is $free_space; less than defined CACHE_MIN_FREE $min_free; attempting clean-up before starting"
-    rm -rf "${CACHE_DIRECTORY:?}"/*
-fi
-
-# Set Docker Registry cache valid time, by default, 60 day ('60d')
-CACHE_VALID_TIME=${CACHE_VALID_TIME:-60d}
-
-# Set default cache valid time for 200 and 205 response.
-sed -i "/# Cache all 200, 206 for 60 days default./a\        proxy_cache_valid 200 206 ${CACHE_VALID_TIME};" /etc/nginx/nginx.conf
+echo "proxy_cache_path /docker_mirror_cache levels=1:2 max_size=$CACHE_MAX_SIZE inactive=$CACHE_INACTIVE keys_zone=cache:10m use_temp_path=off;" > /etc/nginx/conf.d/cache_max_size.conf
 
 # Manifest caching configuration. We generate config based on the environment vars.
 echo -n "" >/etc/nginx/nginx.manifest.caching.config.conf
@@ -157,7 +116,6 @@ echo -n "" >/etc/nginx/nginx.manifest.caching.config.conf
     # First tier caching of manifests; configure via MANIFEST_CACHE_PRIMARY_REGEX and MANIFEST_CACHE_PRIMARY_TIME
     location ~ ^/v2/(.*)/manifests/${MANIFEST_CACHE_PRIMARY_REGEX} {
         set \$docker_proxy_request_type "manifest-primary";
-        set \$cache_key \$request_method\$uri;
         proxy_cache_valid ${MANIFEST_CACHE_PRIMARY_TIME};
         include "/etc/nginx/nginx.manifest.stale.conf";
     }
@@ -167,7 +125,6 @@ EOD
     # Secondary tier caching of manifests; configure via MANIFEST_CACHE_SECONDARY_REGEX and MANIFEST_CACHE_SECONDARY_TIME
     location ~ ^/v2/(.*)/manifests/${MANIFEST_CACHE_SECONDARY_REGEX} {
         set \$docker_proxy_request_type "manifest-secondary";
-        set \$cache_key \$request_method\$uri;
         proxy_cache_valid ${MANIFEST_CACHE_SECONDARY_TIME};
         include "/etc/nginx/nginx.manifest.stale.conf";
     }
@@ -177,7 +134,6 @@ EOD
     # Default tier caching for manifests. Caches for ${MANIFEST_CACHE_DEFAULT_TIME} (from MANIFEST_CACHE_DEFAULT_TIME)
     location ~ ^/v2/(.*)/manifests/ {
         set \$docker_proxy_request_type "manifest-default";
-        set \$cache_key \$request_method\$uri;
         proxy_cache_valid ${MANIFEST_CACHE_DEFAULT_TIME};
         include "/etc/nginx/nginx.manifest.stale.conf";
     }
@@ -187,7 +143,6 @@ EOD
     # Manifest caching is disabled. Enable it with ENABLE_MANIFEST_CACHE=true
     location ~ ^/v2/(.*)/manifests/ {
         set \$docker_proxy_request_type "manifest-default-disabled";
-        set \$cache_key \$request_method\$uri;
         proxy_cache_valid 0s;
         include "/etc/nginx/nginx.manifest.stale.conf";
     }
@@ -197,44 +152,8 @@ echo -e "\nManifest caching config: ---\n"
 cat /etc/nginx/nginx.manifest.caching.config.conf
 echo "---"
 
-if [[ "a${ALLOW_OWN_AUTH}" == "atrue" ]]; then
-    cat << 'EOF' > /etc/nginx/conf.d/allowed_override_auth.conf
-    if ($http_authorization != "") {
-        # override with own authentication if provided
-        set $finalAuth $http_authorization;
-    }
-EOF
-else
-    echo '' > /etc/nginx/conf.d/allowed_override_auth.conf
-fi
-
 if [[ "a${ALLOW_PUSH}" == "atrue" ]]; then
     cat <<EOF > /etc/nginx/conf.d/allowed.methods.conf
-    # allow to upload big layers
-    client_max_body_size 0;
-
-    # only cache GET requests
-    proxy_cache_methods GET;
-EOF
-elif [[ "a${ALLOW_PUSH_WITH_OWN_AUTH}" == "atrue" ]]; then
-    cat << 'EOF' > /etc/nginx/conf.d/allowed.methods.conf
-    # Block POST/PUT/DELETE if own authentication is not provided.
-    set $combined_ha_rm "$http_authorization$request_method";
-    if ($combined_ha_rm = POST) {
-        return 405 "POST method is not allowed";
-    }
-    if ($combined_ha_rm = PUT) {
-        return 405 "PUT method is not allowed";
-    }
-    if ($combined_ha_rm = DELETE) {
-        return 405  "DELETE method is not allowed";
-    }
-
-    if ($http_authorization != "") {
-        # override with own authentication if provided
-        set $finalAuth $http_authorization;
-    }
-
     # allow to upload big layers
     client_max_body_size 0;
 
@@ -353,18 +272,6 @@ cat /etc/nginx/nginx.timeouts.config.conf
 echo -e "---\n"
 
 # Request buffering
-echo "" > /etc/nginx/proxy.buffering.conf
-if [[ "a${PROXY_BUFFERING}" == "afalse" ]]; then
-  cat << EOD > /etc/nginx/proxy.buffering.conf
-  proxy_buffering off;
-EOD
-fi
-
-echo -e "\nBuffering: ---"
-cat /etc/nginx/proxy.buffering.conf
-echo -e "---\n"
-
-# Request buffering
 echo "" > /etc/nginx/proxy.request.buffering.conf
 if [[ "a${PROXY_REQUEST_BUFFERING}" == "afalse" ]]; then
   cat << EOD > /etc/nginx/proxy.request.buffering.conf
@@ -378,20 +285,6 @@ echo -e "\nRequest buffering: ---"
 cat /etc/nginx/proxy.request.buffering.conf
 echo -e "---\n"
 
-# force upstream to use http 1.1
-echo "" > /etc/nginx/http1.1.upstream.conf
-if [[ "a${FORCE_UPSTREAM_HTTP_1_1}" == "atrue" ]]; then
-  cat << EOD > /etc/nginx/http1.1.upstream.conf
-  proxy_http_version 1.1;
-  proxy_set_header Upgrade \$http_upgrade;
-  proxy_set_header Connection "upgrade";
-EOD
-fi
-
-echo -e "\nConfigure upstream http version support: ---"
-cat /etc/nginx/http1.1.upstream.conf
-echo -e "---\n"
-
 # Upstream SSL verification.
 echo "" > /etc/nginx/docker.verify.ssl.conf
 if [[ "a${VERIFY_SSL}" == "atrue" ]]; then
@@ -401,45 +294,13 @@ if [[ "a${VERIFY_SSL}" == "atrue" ]]; then
     # We'll accept any cert signed by a CA trusted by Mozilla (ca-certificates-bundle in alpine)
     proxy_ssl_verify on;
     proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
-    proxy_ssl_verify_depth 2;
+    # docker.io has changed their certificate chain to include another intermediate certificate,
+    # original value of 2 is not enough, bump up depth to 3.
+    proxy_ssl_verify_depth 3;
 EOD
     echo "Upstream SSL certificate verification enabled."
 else
     echo "Upstream SSL certificate verification is DISABLED."
-fi
-
-# Set worker processes if provided
-sed -i "s/worker_processes  auto;/worker_processes  ${WORKER_PROCESSES};/g" /etc/nginx/nginx.conf
-
-echo "" > /etc/nginx/nginx.manifest.override.conf
-if [[ "a${BITNAMI_DOCKERHUB_HOST_OVERRIDE}" == "atrue" && ${BITNAMI_HOST} != "" ]]; then
-    cat << EOD >> /etc/nginx/nginx.manifest.override.conf
-    set \$overrideHost 0;
-    if (\$request_uri ~ ^/v2/bitnami/) {
-        set \$overrideHost 1;
-    }
-    if (\$host !~* (^|\.)docker\.io$) {
-        set \$overrideHost 0;
-    }
-    if (\$overrideHost) {
-        set \$targetHost "${BITNAMI_HOST}";
-    }
-EOD
-fi
-
-if [[ "a${BITNAMI_LEGACY_DOCKERHUB_URI_REWRITE}" == "atrue" ]]; then
-    cat << EOD >> /etc/nginx/nginx.manifest.override.conf
-    set \$doRewrite 0;
-    if (\$request_uri ~ ^/v2/bitnami/) {
-        set \$doRewrite 1;
-    }
-    if (\$host !~* (^|\.)docker\.io$) {
-        set \$doRewrite 0;
-    }
-    if (\$doRewrite) {
-        rewrite ^/v2/bitnami/(.*)$ /v2/bitnamilegacy\$1 break;
-    }
-EOD
 fi
 
 echo -e "\nFinal resolver configuration: ---"
